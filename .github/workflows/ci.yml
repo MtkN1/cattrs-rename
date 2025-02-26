@@ -1,0 +1,50 @@
+name: CI
+on:
+  push: { branches: [main] }
+  pull_request: null
+  workflow_dispatch: null
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.13t"]
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v3
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: uv sync --no-default-groups --group test --group test-ci
+      - run: uv run --no-sync pytest
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v3
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --group lint
+      - name: uv run ruff
+        run: |
+          uv run --no-sync ruff check --output-format=github || exit_status=1
+          uv run --no-sync ruff format --check || exit_status=1
+          exit "${exit_status:-0}"
+  typecheck:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --no-default-groups --group test
+      - run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+      - uses: jakebailey/pyright-action@v2
+        with:
+          pylance-version: latest-release
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v3
+      - uses: astral-sh/setup-uv@v5
+      - run: uv build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: ./dist
